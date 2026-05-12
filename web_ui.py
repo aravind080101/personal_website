@@ -22,20 +22,22 @@ if os.environ.get("STREAMLIT_PROJECT_HOME", "1").lower() not in ("0", "false"):
 
 import streamlit as st
 import streamlit.components.v1 as components
+from streamlit.errors import StreamlitSecretNotFoundError
 
 import pipeline as P
 
 
 def _apply_streamlit_secrets_to_environ() -> None:
-    """Streamlit Community Cloud exposes app secrets via ``st.secrets``; the Agents SDK reads ``OPENAI_API_KEY`` etc. from the environment."""
+    """Copy Streamlit secrets into ``os.environ`` for the OpenAI Agents SDK (optional locally if no secrets.toml)."""
     try:
-        sec = getattr(st, "secrets", None)
-        if sec is None:
-            return
+        sec = st.secrets
+    except StreamlitSecretNotFoundError:
+        return
+    try:
         for key in ("OPENAI_API_KEY", "OPENAI_API_BASE", "OPENAI_ORG_ID"):
             if key in sec and not os.environ.get(key):
                 os.environ[key] = str(sec[key])
-    except (AttributeError, TypeError, RuntimeError):
+    except (KeyError, TypeError, StreamlitSecretNotFoundError):
         pass
 
 
