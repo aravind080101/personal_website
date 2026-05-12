@@ -14,3 +14,9 @@ outputs/*.html
 .vscode/
 .streamlit/secrets.toml
 personal_identity.txt
+outputs/
+personal_profile.json
+run_log.txt
+style_profile.txt
+check_api_key.py
+openai_response_test.py
