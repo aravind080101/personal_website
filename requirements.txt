@@ -1,0 +1,4 @@
+openai-agents>=0.0.14
+python-dotenv>=1.0.0
+streamlit>=1.28.0
+beautifulsoup4>=4.12.0

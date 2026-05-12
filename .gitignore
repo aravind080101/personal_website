@@ -1,0 +1,16 @@
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+*$py.class
+.Python
+.env
+.env.local
+*.log
+.last_update_cache.json
+outputs/*.html
+.DS_Store
+.idea/
+.vscode/
+.streamlit/secrets.toml
+personal_identity.txt
