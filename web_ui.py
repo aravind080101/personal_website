@@ -12,6 +12,9 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
+from typing import Any
+
+from dotenv import load_dotenv
 
 # Streamlit stores config under ``Path.home() / ".streamlit"``. Pointing HOME at this
 # project avoids PermissionError when ``~/.streamlit`` is not writable (e.g. sandbox).
@@ -20,11 +23,11 @@ _project_root = Path(__file__).resolve().parent
 if os.environ.get("STREAMLIT_PROJECT_HOME", "1").lower() not in ("0", "false"):
     os.environ["HOME"] = str(_project_root)
 
+load_dotenv(_project_root / ".env")
+
 import streamlit as st
 import streamlit.components.v1 as components
 from streamlit.errors import StreamlitSecretNotFoundError
-
-import pipeline as P
 
 
 def _apply_streamlit_secrets_to_environ() -> None:
@@ -33,15 +36,42 @@ def _apply_streamlit_secrets_to_environ() -> None:
         sec = st.secrets
     except StreamlitSecretNotFoundError:
         return
+
+    def _set_env(name: str, value: Any) -> None:
+        if value is None:
+            return
+        s = str(value).strip()
+        if s and not os.environ.get(name):
+            os.environ[name] = s
+
     try:
-        for key in ("OPENAI_API_KEY", "OPENAI_API_BASE", "OPENAI_ORG_ID"):
-            if key in sec and not os.environ.get(key):
-                os.environ[key] = str(sec[key])
-    except (KeyError, TypeError, StreamlitSecretNotFoundError):
+        for key in ("OPENAI_API_KEY", "OPENAI_API_BASE", "OPENAI_ORG_ID", "OPENAI_ADMIN_KEY"):
+            if key in sec:
+                _set_env(key, sec[key])
+        # TOML section e.g. [openai] api_key = "..."
+        if "openai" in sec:
+            nested = sec["openai"]
+            for sub_k, env_k in (
+                ("api_key", "OPENAI_API_KEY"),
+                ("api_base", "OPENAI_API_BASE"),
+                ("organization", "OPENAI_ORG_ID"),
+            ):
+                try:
+                    if hasattr(nested, sub_k):
+                        _set_env(env_k, getattr(nested, sub_k))
+                    elif isinstance(nested, dict) and sub_k in nested:
+                        _set_env(env_k, nested[sub_k])
+                except (KeyError, TypeError, AttributeError):
+                    pass
+        # Common alternate root keys
+        for alt, env in (("api_key", "OPENAI_API_KEY"), ("openai_api_key", "OPENAI_API_KEY")):
+            if alt in sec:
+                _set_env(env, sec[alt])
+    except (KeyError, TypeError, StreamlitSecretNotFoundError, AttributeError):
         pass
 
 
-def _init_session() -> None:
+def _init_session(pipeline_mod: Any) -> None:
     if "agent_result" not in st.session_state:
         st.session_state.agent_result = ""
     if "agent_logs" not in st.session_state:
@@ -49,7 +79,7 @@ def _init_session() -> None:
     if "last_run_done" not in st.session_state:
         st.session_state.last_run_done = False
     if "personal_identity" not in st.session_state:
-        st.session_state.personal_identity = P.load_personal_identity()
+        st.session_state.personal_identity = pipeline_mod.load_personal_identity()
 
 
 def main() -> None:
@@ -59,7 +89,17 @@ def main() -> None:
         initial_sidebar_state="collapsed",
     )
     _apply_streamlit_secrets_to_environ()
-    _init_session()
+    import pipeline as P
+
+    _init_session(P)
+
+    if not (os.environ.get("OPENAI_API_KEY") or os.environ.get("OPENAI_ADMIN_KEY")):
+        st.error(
+            "Missing **OPENAI_API_KEY** (or **OPENAI_ADMIN_KEY**). "
+            "Locally: add it to a `.env` file in the project root (see `.env.example`). "
+            "On Streamlit Community Cloud: **App settings → Secrets** with "
+            "`OPENAI_API_KEY = \"sk-...\"` (or use an `[openai]` section with `api_key = \"...\"`), then reboot the app."
+        )
 
     st.title("Pradeep.io")
     st.caption(
